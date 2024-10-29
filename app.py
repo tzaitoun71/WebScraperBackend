@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from models import db, VisitorClassification
 from scraping import scrape_website
 from question_generator import classify_content, generate_questions
+from visitor_categorization import categorize_user_profile
 import os
 from dotenv import load_dotenv
 
@@ -28,29 +29,45 @@ def classify():
     data = request.json
     url = data.get('url')
 
-    scraped_content = scrape_website(url)
-    classification = classify_content(scraped_content)
+    if not url:
+        return jsonify({"error": "URL is required"}), 400
 
-    visitor = VisitorClassification(url=url, classification=classification)
+    scraped_content = scrape_website(url)
+    industry_classification = classify_content(scraped_content)
+    questions = generate_questions(industry_classification)
+
+    return jsonify({
+        "classification": industry_classification,
+        "questions": questions
+    })
+
+@app.post('/categorize-visitor')
+def categorize_visitor():
+    data = request.json
+    url = data.get('url')
+    name = data.get('name')
+    industry = data.get('industry')
+    questions = data.get('questions')
+    responses = data.get('responses')
+
+    if not name or not url or not industry or not questions or not responses:
+        return jsonify({"error": "Name, URL, industry, questions, and responses are required"}), 400
+
+    visitor_profile = categorize_user_profile(industry, questions, responses)
+
+    # Save everything to the database only after categorization is done
+    visitor = VisitorClassification(
+        name=name,
+        url=url,
+        industry_classification=industry,
+        visitor_categorization=visitor_profile
+    )
     db.session.add(visitor)
     db.session.commit()
 
-    return jsonify({"message": "Classification saved successfully", "classification": classification})
-
-@app.post('/generate-questions')
-def generate_questions_endpoint():
-    data = request.json
-    url = data.get('url')
-    if not url:
-        return jsonify({"error": "No URL provided"}), 400
-
-    scraped_content = scrape_website(url)
-    industry = classify_content(scraped_content)
-    questions = generate_questions(industry)
-
     return jsonify({
-        "industry": industry,
-        "questions": questions
+        "visitor_profile": visitor_profile,
+        "message": "Visitor data saved successfully"
     })
 
 with app.app_context():
