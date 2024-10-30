@@ -3,30 +3,24 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def categorize_user_profile(industry, questions, responses):
-    categorization_prompt = (
-        f"The visitor is interested in the {industry} industry. Based on the following questions and responses, "
-        "categorize the user's profile in a few words, taking into account their interests within this industry. "
-        "Please respond with only the categorization, without any extra words or formatting.\n\n"
-        "Questions and Answers:\n"
+def determine_visitor_intent(questions, responses):
+    prompt = (
+        "Based on the following questions and responses, determine the visitor's intent:\n\n"
+        "Questions and Responses:\n" + 
+        "\n".join([f"Q: {q}\nA: {a}" for q, a in zip(questions, responses)]) +
+        "\n\nSummarize the visitor's intent in one sentence."
     )
 
-    for i, (question, answer) in enumerate(zip(questions, responses)):
-        categorization_prompt += f"Q{i+1}: {question}\nA{i+1}: {answer}\n"
-    
-    categorization_prompt += "\nProvide a concise categorization based on the answers and industry context."
-
-    response = client.chat.completions.create(
+    completion = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": "You are a categorizing assistant who identifies visitor profiles based on their answers to multiple-choice questions."},
-            {"role": "user", "content": categorization_prompt}
+            {"role": "system", "content": "You are an assistant that categorizes visitor intent based on provided questions and responses."},
+            {"role": "user", "content": prompt}
         ],
-        max_tokens=50
+        max_tokens=100
     )
 
-    user_profile = response.choices[0].message.content.strip()
-    return user_profile
+    intent = completion.choices[0].message.content.strip()
+    return intent

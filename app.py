@@ -1,8 +1,8 @@
 from flask import Flask, request, jsonify
 from models import db, VisitorClassification
 from scraping import scrape_website
-from question_generator import classify_content, generate_questions
-from visitor_categorization import categorize_user_profile
+from question_generator import generate_content_based_questions
+from visitor_categorization import determine_visitor_intent
 import os
 from dotenv import load_dotenv
 
@@ -24,8 +24,8 @@ def scrape():
     scraped_content = scrape_website(url)
     return jsonify({"content": scraped_content})
 
-@app.post('/classify')
-def classify():
+@app.post('/generate-questions')
+def generate_questions():
     data = request.json
     url = data.get('url')
 
@@ -33,11 +33,9 @@ def classify():
         return jsonify({"error": "URL is required"}), 400
 
     scraped_content = scrape_website(url)
-    industry_classification = classify_content(scraped_content)
-    questions = generate_questions(industry_classification)
+    questions = generate_content_based_questions(scraped_content)
 
     return jsonify({
-        "classification": industry_classification,
         "questions": questions
     })
 
@@ -46,28 +44,25 @@ def categorize_visitor():
     data = request.json
     url = data.get('url')
     name = data.get('name')
-    industry = data.get('industry')
     questions = data.get('questions')
     responses = data.get('responses')
 
-    if not name or not url or not industry or not questions or not responses:
-        return jsonify({"error": "Name, URL, industry, questions, and responses are required"}), 400
+    if not name or not url or not questions or not responses:
+        return jsonify({"error": "Name, URL, questions, and responses are required"}), 400
 
-    visitor_profile = categorize_user_profile(industry, questions, responses)
+    visitor_intent = determine_visitor_intent(questions, responses)
 
-    # Save everything to the database only after categorization is done
     visitor = VisitorClassification(
         name=name,
         url=url,
-        industry_classification=industry,
-        visitor_categorization=visitor_profile
+        visitor_intent=visitor_intent
     )
     db.session.add(visitor)
     db.session.commit()
 
     return jsonify({
-        "visitor_profile": visitor_profile,
-        "message": "Visitor data saved successfully"
+        "visitor_intent": visitor_intent,
+        "message": "Visitor intent saved successfully"
     })
 
 with app.app_context():
